@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solana Whale Watcher</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#14F195',
+                        secondary: '#9945FF',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+            min-height: 100vh;
+            color: #f1f5f9;
+        }
+        
+        .filter-input {
+            display: none;
+            margin-top: 8px;
+        }
+        
+        .filter-input.active {
+            display: flex;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border: 1px solid #334155;
+            border-radius: 12px;
+            padding: 24px;
+            transition: transform 0.2s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #14F195 0%, #0ea97a 100%);
+            color: #0f172a;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(20, 241, 149, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #334155;
+            color: #f1f5f9;
+            border: 1px solid #475569;
+        }
+        
+        .btn-secondary:hover {
+            background: #475569;
+        }
+        
+        .table-container {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: #1e293b;
+        }
+        
+        th {
+            padding: 16px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #94a3b8;
+            border-bottom: 1px solid #334155;
+        }
+        
+        td {
+            padding: 16px;
+            border-bottom: 1px solid #334155;
+            font-size: 14px;
+        }
+        
+        tbody tr {
+            background: #0f172a;
+            transition: background 0.2s;
+        }
+        
+        tbody tr:hover {
+            background: #1e293b;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 6px;
+            background: #334155;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .wallet-link {
+            color: #14F195;
+            text-decoration: none;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .wallet-link:hover {
+            text-decoration: underline;
+        }
+        
+        .icon {
+            width: 16px;
+            height: 16px;
+            display: inline-block;
+            cursor: pointer;
+        }
+        
+        .copy-icon:hover {
+            color: #14F195;
+        }
+        
+        .filter-icon:hover {
+            color: #14F195;
+        }
+        
+        .sort-icon:hover {
+            color: #14F195;
+        }
+        
+        input[type="text"],
+        input[type="number"] {
+            background: #334155;
+            border: 1px solid #475569;
+            border-radius: 6px;
+            padding: 8px 12px;
+            color: #f1f5f9;
+            outline: none;
+        }
+        
+        input[type="text"]:focus,
+        input[type="number"]:focus {
+            border-color: #14F195;
+        }
+        
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.active {
+            background: #14F195;
+        }
+        
+        .status-indicator.paused {
+            background: #fbbf24;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .header-icon {
+            background: linear-gradient(135deg, #14F195 0%, #0ea97a 100%);
+            padding: 12px;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .stat-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .scroll-container {
+            overflow-x: auto;
+        }
+        
+        .scroll-container::-webkit-scrollbar {
+            height: 8px;
+        }
+        
+        .scroll-container::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        
+        .scroll-container::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        
+        .scroll-container::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        
+        .tab-btn:hover {
+            color: #f1f5f9 !important;
+        }
+        
+        .tab-btn.active {
+            color: #f1f5f9 !important;
+            border-bottom-color: #14F195 !important;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        
+        .status-bonding {
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+        }
+        
+        .status-migrated {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+        
+        .tx-type-buy {
+            color: #22c55e;
+            font-weight: 600;
+        }
+        
+        .tx-type-sell {
+            color: #ef4444;
+            font-weight: 600;
+        }
+    </style>
+<link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACklEQVR4nGNgYAAAAAQAAfIfBZsAAAAASUVORK5CYII="></head>
+<body>
+    <div class="container" style="max-width: 1400px; margin: 0 auto; padding: 32px 16px;">
+        <!-- Header -->
+        <header style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div class="header-icon">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                    </svg>
+                </div>
+                <h1 style="font-size: 32px; font-weight: 700;">Solana Whale Watcher</h1>
+            </div>
+            
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+                <div style="position: relative;">
+                    <input type="number" id="threshold" value="1000" style="width: 150px; padding-right: 50px;">
+                    <span style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 14px;">SOL</span>
+                </div>
+                <button class="btn btn-secondary" id="pauseBtn" onclick="togglePause()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="4" width="4" height="16"></rect>
+                        <rect x="14" y="4" width="4" height="16"></rect>
+                    </svg>
+                    Pause
+                </button>
+                <button class="btn btn-primary" onclick="exportCSV()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export
+                </button>
+            </div>
+        </header>
+        
+        <!-- Tabs -->
+        <div style="margin-bottom: 24px; border-bottom: 1px solid #334155;">
+            <div style="display: flex; gap: 8px;">
+                <button class="tab-btn active" onclick="switchTab('main')" id="mainTab" style="padding: 12px 24px; background: transparent; border: none; color: #f1f5f9; font-weight: 600; cursor: pointer; border-bottom: 2px solid #14F195; transition: all 0.2s;">
+                    Main
+                </button>
+                <button class="tab-btn" onclick="switchTab('memecoin')" id="memecoinTab" style="padding: 12px 24px; background: transparent; border: none; color: #94a3b8; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s;">
+                    Memecoin
+                </button>
+            </div>
+        </div>
+        
+        <!-- Main Tab Content -->
+        <div id="mainContent" class="tab-content active">
+        <!-- Stats -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 24px;">
+            <div class="stat-card">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div>
+                        <p style="color: #94a3b8; font-size: 14px; margin-bottom: 8px;">Today's Volume</p>
+                        <p style="font-size: 28px; font-weight: 700;">$<span id="dailyVolume">0</span></p>
+                        <p style="color: #64748b; font-size: 12px; margin-top: 8px;">
+                            <span style="color: #14F195;">+12.4%</span> from yesterday
+                        </p>
+                    </div>
+                    <div class="stat-icon" style="background: rgba(20, 241, 149, 0.1);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#14F195" stroke-width="2">
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div>
+                        <p style="color: #94a3b8; font-size: 14px; margin-bottom: 8px;">Largest Today</p>
+                        <p style="font-size: 28px; font-weight: 700;">$<span id="largestTx">0</span></p>
+                        <p style="color: #64748b; font-size: 12px; margin-top: 8px;" id="largestDetail">0 SOL</p>
+                    </div>
+                    <div class="stat-icon" style="background: rgba(153, 69, 255, 0.1);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9945FF" stroke-width="2">
+                            <circle cx="12" cy="8" r="7"></circle>
+                            <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div>
+                        <p style="color: #94a3b8; font-size: 14px; margin-bottom: 8px;">Active Whales</p>
+                        <p style="font-size: 28px; font-weight: 700;"><span id="activeWhales">0</span></p>
+                        <p style="color: #64748b; font-size: 12px; margin-top: 8px;">
+                            <span style="color: #14F195;">+<span id="newWhales">0</span></span> new today
+                        </p>
+                    </div>
+                    <div class="stat-icon" style="background: rgba(6, 182, 212, 0.1);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#06b6d4" stroke-width="2">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="9" cy="7" r="4"></circle>
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Table -->
+        <div class="table-container">
+            <div class="scroll-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    WALLET
+                                    <svg class="icon filter-icon" onclick="toggleFilter('wallet')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                </div>
+                                <div id="walletFilter" class="filter-input">
+                                    <input type="text" id="walletInput" placeholder="Search wallet..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearFilter('wallet')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    TOKEN PAIR
+                                    <svg class="icon filter-icon" onclick="toggleFilter('tokenPair')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                </div>
+                                <div id="tokenPairFilter" class="filter-input">
+                                    <input type="text" id="tokenPairInput" placeholder="Search pair..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearFilter('tokenPair')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    PLATFORM
+                                    <svg class="icon filter-icon" onclick="toggleFilter('platform')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                </div>
+                                <div id="platformFilter" class="filter-input">
+                                    <input type="text" id="platformInput" placeholder="Search platform..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearFilter('platform')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    SOL AMOUNT
+                                    <svg class="icon filter-icon" onclick="toggleFilter('solAmount')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                    <svg class="icon sort-icon" onclick="toggleSort('solAmount')" id="solAmountSort" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                                        <polyline points="5 12 12 5 19 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div id="solAmountFilter" class="filter-input">
+                                    <input type="number" id="solAmountInput" placeholder="Min amount..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearFilter('solAmount')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    USD VALUE
+                                    <svg class="icon filter-icon" onclick="toggleFilter('usdValue')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                    <svg class="icon sort-icon" onclick="toggleSort('usdValue')" id="usdValueSort" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                                        <polyline points="5 12 12 5 19 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div id="usdValueFilter" class="filter-input">
+                                    <input type="number" id="usdValueInput" placeholder="Min value..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearFilter('usdValue')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    TIME
+                                    <svg class="icon filter-icon" onclick="toggleFilter('time')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                    <svg class="icon sort-icon" onclick="toggleSort('time')" id="timeSort" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                                        <polyline points="5 12 12 5 19 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div id="timeFilter" class="filter-input">
+                                    <input type="text" id="timeInput" placeholder="Search time..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearFilter('time')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    DATE
+                                    <svg class="icon filter-icon" onclick="toggleFilter('date')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                </div>
+                                <div id="dateFilter" class="filter-input">
+                                    <input type="text" id="dateInput" placeholder="Search date..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearFilter('date')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionsBody">
+                        <tr>
+                            <td colspan="7" style="text-align: center; color: #64748b; padding: 40px;">
+                                Loading transactions...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Status -->
+        <div style="margin-top: 20px; display: flex; align-items: center; gap: 8px; font-size: 14px;">
+            <span class="status-indicator active" id="statusIndicator"></span>
+            <span id="statusText">Connected to Solana Mainnet</span>
+            <span style="color: #64748b;">•</span>
+            <span style="color: #94a3b8;">Processing transactions...</span>
+        </div>
+        </div>
+        
+        <!-- Memecoin Tab Content -->
+        <div id="memecoinContent" class="tab-content">
+        <!-- Memecoin Stats -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-bottom: 24px;">
+            <div class="stat-card">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div>
+                        <p style="color: #94a3b8; font-size: 14px; margin-bottom: 8px;">Bonding Curve Tokens</p>
+                        <p style="font-size: 28px; font-weight: 700;"><span id="bondingTokens">0</span></p>
+                        <p style="color: #64748b; font-size: 12px; margin-top: 8px;">
+                            <span style="color: #fbbf24;">Active</span> bonding
+                        </p>
+                    </div>
+                    <div class="stat-icon" style="background: rgba(251, 191, 36, 0.1);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="2">
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div>
+                        <p style="color: #94a3b8; font-size: 14px; margin-bottom: 8px;">Migrated Tokens</p>
+                        <p style="font-size: 28px; font-weight: 700;"><span id="migratedTokens">0</span></p>
+                        <p style="color: #64748b; font-size: 12px; margin-top: 8px;">
+                            <span style="color: #22c55e;">Successfully</span> migrated
+                        </p>
+                    </div>
+                    <div class="stat-icon" style="background: rgba(34, 197, 94, 0.1);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div style="display: flex; justify-content: space-between; align-items: start;">
+                    <div>
+                        <p style="color: #94a3b8; font-size: 14px; margin-bottom: 8px;">Total Volume</p>
+                        <p style="font-size: 28px; font-weight: 700;">$<span id="memecoinVolume">0</span></p>
+                        <p style="color: #64748b; font-size: 12px; margin-top: 8px;">
+                            <span style="color: #14F195;">Buy/Sell</span> activity
+                        </p>
+                    </div>
+                    <div class="stat-icon" style="background: rgba(20, 241, 149, 0.1);">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#14F195" stroke-width="2">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Memecoin Table -->
+        <div class="table-container">
+            <div class="scroll-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    TOKEN NAME
+                                    <svg class="icon filter-icon" onclick="toggleMemecoinFilter('tokenName')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                </div>
+                                <div id="tokenNameFilter" class="filter-input">
+                                    <input type="text" id="tokenNameInput" placeholder="Search token..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearMemecoinFilter('tokenName')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    STATUS
+                                    <svg class="icon filter-icon" onclick="toggleMemecoinFilter('status')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                </div>
+                                <div id="statusFilter" class="filter-input">
+                                    <input type="text" id="statusInput" placeholder="bonding/migrated..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearMemecoinFilter('status')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    PLATFORM
+                                    <svg class="icon filter-icon" onclick="toggleMemecoinFilter('memePlatform')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                </div>
+                                <div id="memePlatformFilter" class="filter-input">
+                                    <input type="text" id="memePlatformInput" placeholder="Search platform..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearMemecoinFilter('memePlatform')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    TYPE
+                                    <svg class="icon filter-icon" onclick="toggleMemecoinFilter('txType')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                </div>
+                                <div id="txTypeFilter" class="filter-input">
+                                    <input type="text" id="txTypeInput" placeholder="buy/sell..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearMemecoinFilter('txType')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    WALLET
+                                    <svg class="icon filter-icon" onclick="toggleMemecoinFilter('memeWallet')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                </div>
+                                <div id="memeWalletFilter" class="filter-input">
+                                    <input type="text" id="memeWalletInput" placeholder="Search wallet..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearMemecoinFilter('memeWallet')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    AMOUNT
+                                    <svg class="icon filter-icon" onclick="toggleMemecoinFilter('amount')" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon>
+                                    </svg>
+                                    <svg class="icon sort-icon" onclick="toggleMemecoinSort('amount')" id="amountSort" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                                        <polyline points="5 12 12 5 19 12"></polyline>
+                                    </svg>
+                                </div>
+                                <div id="amountFilter" class="filter-input">
+                                    <input type="number" id="amountInput" placeholder="Min amount..." style="flex: 1; font-size: 12px;">
+                                    <button onclick="clearMemecoinFilter('amount')" style="background: transparent; border: none; color: #94a3b8; cursor: pointer; padding: 0 8px;">✕</button>
+                                </div>
+                            </th>
+                            <th>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    TIME
+                                    <svg class="icon sort-icon" onclick="toggleMemecoinSort('time')" id="memeTimeSort" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                                        <polyline points="5 12 12 5 19 12"></polyline>
+                                    </svg>
+                                </div>
+                            </th>
+                            <th>DATE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="memecoinBody">
+                        <tr>
+                            <td colspan="8" style="text-align: center; color: #64748b; padding: 40px;">
+                                Loading memecoin transactions...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Status -->
+        <div style="margin-top: 20px; display: flex; align-items: center; gap: 8px; font-size: 14px;">
+            <span class="status-indicator active" id="memecoinStatusIndicator"></span>
+            <span id="memecoinStatusText">Tracking Memecoin Platforms</span>
+            <span style="color: #64748b;">•</span>
+            <span style="color: #94a3b8;">Buy/Sell activity...</span>
+        </div>
+        </div>
+        
+    </div>
+    
+    <script>// ====== CONFIG ======
+const HELIUS_HTTP = '';
+const HELIUS_WS   = '';
+const RPC_FALLBACKS = ['https://rpc.ankr.com/solana'];
+let rpcFallbackIdx = 0;
+function currentHttp(){ return location.origin + '/rpc'; }
+function currentWs(){ return 'wss://rpc.ankr.com/solana/ws'; }
+function rotateHttp(){ rpcFallbackIdx = (rpcFallbackIdx + 1) % RPC_FALLBACKS.length; }
+function rotateHttp(){ rpcFallbackIdx = (rpcFallbackIdx + 1) % RPC_FALLBACKS.length; }
+
+// Program IDs
+const PLATFORM_PROGRAMS = {
+  'pump.fun': '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P',
+  'bonk.fun': 'FfYek5vEz23cMkWsdJwG2oa6EphsvXSHrGpdALN4g6W1',
+  'bags.fm': 'BAGSB9TpGrZxQbEsrEznv5jXXdwyP6AXerN8aVRiAmcv',
+  'heaven.xyz': 'HEAVENoP2qxoeuF8Dj2oT1GHEnu49U5mJYkdeC8BAX2o',
+  'believe.app': '5qWya6UjwWnGVhdSBL3hyZ7B45jbk6Byt1hwd7ohEGXE',
+  'boop.fun': 'boop8hVGQGqehUK2iVEMEnMrL5RbjywRzHKBmBE7ry4',
+  'moon.it': 'MoonCVVNZFSYkqNXP6bxHLPL6QQJiMagDL3qcqUQTrG'
+};
+
+// ====== STATE ======
+let streaming = true;
+let WS_DISABLED = true;
+let solPrice = 0;
+let transactions = [];
+let memecoinTxs = [];
+let sortState = { col: 'timestamp', dir: 'desc' };
+let memeSortState = { col: 'timestamp', dir: 'desc' };
+
+// ====== CORS-AWARE FETCH + RPC SCHEDULER ======
+let USING_CORS_PROXY = false;
+async function tryFetch(url, options){ return fetch(url, options); }
+const rpcQueue = [];
+let rpcBusy = false;
+let rpcDelay = 1500;
+let lastRpcAt = 0;
+function scheduleRpc(method, params){
+  return new Promise((resolve, reject)=>{
+    rpcQueue.push({method, params, resolve, reject});
+    pumpRpcQueue();
+  });
+}
+async function pumpRpcQueue(){
+  if (rpcBusy) return;
+  rpcBusy = true;
+  while (rpcQueue.length){
+    const now = Date.now();
+    const wait = Math.max(0, lastRpcAt + rpcDelay - now);
+    if (wait) await new Promise(r=>setTimeout(r, wait));
+    const item = rpcQueue.shift();
+    try{
+      const res = await tryFetch(currentHttp(), {
+        method:'POST',
+        headers:{'content-type':'application/json'},
+        body: JSON.stringify({jsonrpc:'2.0', id:1, method:item.method, params:item.params})
+      });
+      lastRpcAt = Date.now();
+      if (!res.ok){
+        if (res.status === 429){ rotateHttp(); rpcDelay = Math.min(rpcDelay*2, 20000); rpcQueue.unshift(item); continue; }
+        if (res.status >= 500){ rotateHttp(); throw new Error('HTTP '+res.status); }
+        throw new Error('HTTP '+res.status);
+      }
+      const j = await res.json();
+      if (j.error) throw new Error(j.error.message || 'RPC error');
+      rpcDelay = Math.max(800, Math.floor(rpcDelay*0.9));
+      item.resolve(j.result);
+    }catch(e){
+      rpcDelay = Math.min(rpcDelay*1.5, 20000);
+      item.reject(e);
+    }
+  }
+  rpcBusy = false;
+}
+
+// ====== HELPERS ======
+function lamportsToSol(x){ return x/1e9; }
+async function getSolPrice(){
+  try{
+    const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd');
+    const j = await r.json();
+    solPrice = j?.solana?.usd || 0;
+  }catch(_){ solPrice = 0; }
+  setTimeout(getSolPrice, 300000);
+}
+function formatUsd(x){ return '$' + Math.round(Number(x)||0).toLocaleString(); }
+function formatSol(x){ return (Math.round(Number(x)*100)/100).toLocaleString() + ' SOL'; }
+function copyWallet(w){ try{ navigator.clipboard.writeText(w); }catch(_){ } }
+
+// ====== RENDER ======
+function renderTransactions(){
+  const tbody = document.getElementById('transactionsBody');
+  if (!tbody) return;
+  let list = [...transactions];
+  const w = document.getElementById('walletInput')?.value?.trim().toLowerCase() || '';
+  const p = document.getElementById('platformInput')?.value?.trim().toLowerCase() || '';
+  const pair = document.getElementById('tokenPairInput')?.value?.trim().toLowerCase() || '';
+  let minSol = Number(document.getElementById('solAmountInput')?.value || 0); if (!isFinite(minSol) || minSol<0) minSol = 0;
+  let minUsd = Number(document.getElementById('usdValueInput')?.value || 0); if (!isFinite(minUsd) || minUsd<0) minUsd = 0;
+  const date = document.getElementById('dateInput')?.value?.trim() || '';
+  const time = document.getElementById('timeInput')?.value?.trim() || '';
+
+  list = list.filter(t =>
+    (!w || t.wallet.toLowerCase().includes(w)) &&
+    (!p || (t.platform||'').toLowerCase().includes(p)) &&
+    (!pair || (t.tokenPair||'').toLowerCase().includes(pair)) &&
+    (Number(t.solAmount) >= minSol) &&
+    (Number(t.usdValue) >= minUsd) &&
+    (!date || t.date.includes(date)) &&
+    (!time || t.time.includes(time))
+  );
+  list.sort((a,b)=> sortState.dir==='asc' ? (a[sortState.col]>b[sortState.col]?1:-1) : (a[sortState.col]<b[sortState.col]?1:-1));
+
+  if (!list.length){
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:40px;">No transactions found matching your filters</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.slice(0,100).map(tx => `
+    <tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <a href="https://solscan.io/account/${tx.wallet}" target="_blank" class="wallet-link">${tx.wallet}</a>
+          <svg onclick="copyWallet('${tx.wallet}')" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;width:16px;height:16px;cursor:pointer;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </div>
+      </td>
+      <td>${tx.tokenPair||'SOL/*'}</td>
+      <td>${tx.platform||'Unknown'}</td>
+      <td>${formatSol(tx.solAmount)}</td>
+      <td>${formatUsd(tx.usdValue)}</td>
+      <td>${tx.time}</td>
+      <td>${tx.date}</td>
+    </tr>`).join('');
+}
+
+function renderMemecoinTransactions(){
+  const tbody = document.getElementById('memecoinBody');
+  if (!tbody) return;
+  let list = [...memecoinTxs];
+  const tname = document.getElementById('tokenNameInput')?.value?.trim().toLowerCase() || '';
+  const status = document.getElementById('statusInput')?.value?.trim().toLowerCase() || '';
+  const platform = document.getElementById('memePlatformInput')?.value?.trim().toLowerCase() || '';
+  const txtype = document.getElementById('txTypeInput')?.value?.trim().toLowerCase() || '';
+  const wallet = document.getElementById('memeWalletInput')?.value?.trim().toLowerCase() || '';
+  const minAmt = Number(document.getElementById('amountInput')?.value || 0) || 0;
+
+  list = list.filter(t =>
+    (!tname || (t.tokenName||'').toLowerCase().includes(tname)) &&
+    (!status || (t.status||'').toLowerCase().includes(status)) &&
+    (!platform || (t.platform||'').toLowerCase().includes(platform)) &&
+    (!txtype || (t.txType||'').toLowerCase().includes(txtype)) &&
+    (!wallet || (t.wallet||'').toLowerCase().includes(wallet)) &&
+    (Number(t.amount) >= minAmt)
+  );
+  list.sort((a,b)=> memeSortState.dir==='asc' ? (a[memeSortState.col]>b[memeSortState.col]?1:-1) : (a[memeSortState.col]<b[memeSortState.col]?1:-1));
+
+  if (!list.length){
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:40px;">No transactions found matching your filters</td></tr>';
+    return;
+  }
+  tbody.innerHTML = list.slice(0,100).map(tx => `
+    <tr>
+      <td>${tx.tokenName||'Unknown'}</td>
+      <td>${tx.status||'bonding'}</td>
+      <td>${tx.platform||'Unknown'}</td>
+      <td>${tx.txType||'BUY'}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <a href="https://solscan.io/account/${tx.wallet}" target="_blank" class="wallet-link">${tx.wallet}</a>
+          <svg onclick="copyWallet('${tx.wallet}')" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;width:16px;height:16px;cursor:pointer;"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+        </div>
+      </td>
+      <td>${formatUsd(tx.amountUsd||0)}</td>
+    </tr>`).join('');
+}
+
+// ====== FILTERS, SORT, UI ======
+function applyFilters(){ renderTransactions(); }
+function applyMemecoinFilters(){ renderMemecoinTransactions(); }
+function clearFilter(which){
+  const ids = {wallet:'walletInput', tokenPair:'tokenPairInput', platform:'platformInput', solAmount:'solAmountInput', usdValue:'usdValueInput', time:'timeInput', date:'dateInput'};
+  const el = document.getElementById(ids[which]); if (el){ el.value=''; applyFilters(); }
+}
+function clearMemecoinFilter(which){
+  const ids = {tokenName:'tokenNameInput', status:'statusInput', platform:'memePlatformInput', txType:'txTypeInput', wallet:'memeWalletInput', amount:'amountInput'};
+  const el = document.getElementById(ids[which]); if (el){ el.value=''; applyMemecoinFilters(); }
+}
+function toggleFilter(){}
+function toggleMemecoinFilter(){}
+function toggleSort(col){ if (sortState.col===col) sortState.dir=sortState.dir==='asc'?'desc':'asc'; else { sortState.col=col; sortState.dir='desc'; } renderTransactions(); }
+function toggleMemecoinSort(col){ if (memeSortState.col===col) memeSortState.dir=memeSortState.dir==='asc'?'desc':'asc'; else { memeSortState.col=col; memeSortState.dir='desc'; } renderMemecoinTransactions(); }
+function exportCSV(){
+  const rows = [['wallet','pair','platform','sol','usd','time','date']].concat(
+    transactions.map(t=>[t.wallet,t.tokenPair||'',t.platform||'',t.solAmount,t.usdValue,t.time,t.date])
+  );
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download = 'whale-transfers.csv'; a.click();
+}
+function switchTab(tab){
+  const main = document.getElementById('mainTab'); const meme = document.getElementById('memecoinTab');
+  if (!main || !meme) return;
+  if (tab==='main'){ main.style.display='block'; meme.style.display='none'; } else { main.style.display='none'; meme.style.display='block'; }
+}
+function togglePause(){ streaming = !streaming; const btn=document.getElementById('pauseBtn'); if (btn) btn.textContent = streaming ? 'Pause' : 'Resume'; updateStats(); }
+function bindInputs(){
+  const ids = ['walletInput','tokenPairInput','platformInput','solAmountInput','usdValueInput','timeInput','dateInput'];
+  ids.forEach(id=> { const el=document.getElementById(id); if(!el) return; el.addEventListener('input',applyFilters); el.addEventListener('change',applyFilters); el.addEventListener('keyup',e=>{if(e.key==='Enter')applyFilters();}); });
+  const mids = ['tokenNameInput','statusInput','memePlatformInput','txTypeInput','memeWalletInput','amountInput'];
+  mids.forEach(id=> { const el=document.getElementById(id); if(!el) return; el.addEventListener('input',applyMemecoinFilters); el.addEventListener('change',applyMemecoinFilters); el.addEventListener('keyup',e=>{if(e.key==='Enter')applyMemecoinFilters();}); });
+}
+
+// ====== STATS ======
+function updateStats(){
+  const dv = document.getElementById('dailyVolume');
+  const lt = document.getElementById('largestTx');
+  const ld = document.getElementById('largestDetail');
+  const aw = document.getElementById('activeWhales');
+  const nw = document.getElementById('newWhales');
+  const statusIndicator = document.getElementById('statusIndicator');
+  const statusText = document.getElementById('statusText');
+  const totalUsd = transactions.reduce((s,t)=>s+(Number(t.usdValue)||0),0);
+  const largest = transactions.reduce((m,t)=>Math.max(m, Number(t.usdValue)||0),0);
+  const largestTx = transactions.find(t=>(Number(t.usdValue)||0)===largest);
+  const unique = new Set(transactions.map(t=>t.wallet)).size;
+  if (dv) dv.textContent = '$' + Math.round(totalUsd).toLocaleString();
+  if (lt) lt.textContent = '$' + Math.round(largest).toLocaleString();
+  if (ld) ld.textContent = largestTx ? `${(Number(largestTx.solAmount)||0).toFixed(2)} SOL` : '0 SOL';
+  if (aw) aw.textContent = unique.toString();
+  if (nw) nw.textContent = Math.max(0, unique - 5).toString();
+  if (statusIndicator) statusIndicator.style.background = streaming ? '#22c55e' : '#ef4444';
+  if (statusText){ const transport = 'HTTP'; const via = USING_CORS_PROXY ? 'Proxy' : (currentHttp().includes('helius')?'Helius':'Public RPC'); statusText.textContent = streaming ? `Live • ${transport} • ${via}` : `Paused • ${transport} • ${via}`; }
+}
+function updateMemecoinStats(){
+  const mv = document.getElementById('memecoinVolume');
+  const ind = document.getElementById('memecoinStatusIndicator');
+  const txt = document.getElementById('memecoinStatusText');
+  const total = memecoinTxs.reduce((s,t)=>s+(Number(t.amountUsd)||0),0);
+  if (mv) mv.textContent = '$' + Math.round(total).toLocaleString();
+  if (ind) ind.style.background = streaming ? '#22c55e' : '#ef4444';
+  if (txt) txt.textContent = 'Tracking Memecoin Platforms';
+}
+
+// ====== INGEST ======
+function addTransaction(t){ transactions.unshift(t); if (transactions.length>500) transactions.pop(); updateStats(); applyFilters(); }
+function addMemecoinTransaction(t){ memecoinTxs.unshift(t); if (memecoinTxs.length>500) memecoinTxs.pop(); updateMemecoinStats(); applyMemecoinFilters(); }
+
+function extractWhaleEventsFromBlock(block){
+  if (!block || !block.transactions) return [];
+  const out = [];
+  for (const tx of block.transactions){
+    const meta = tx.meta; const tr = tx.transaction;
+    if (!meta || !tr) continue;
+    const pre = meta.preBalances||[]; const post = meta.postBalances||[];
+    if (pre.length !== post.length) continue;
+    let maxGain = {idx:-1, val:0}, maxLoss = {idx:-1, val:0};
+    for (let i=0;i<pre.length;i++){ const delta = post[i]-pre[i]; if (delta>maxGain.val){ maxGain={idx:i,val:delta}; } if (delta<maxLoss.val){ maxLoss={idx:i,val:delta}; } }
+    const sol = Math.abs(lamportsToSol(Math.min(maxGain.val, -maxLoss.val)));
+    if (!isFinite(sol) || sol<=0) continue;
+    const threshold = Number(document.getElementById('threshold')?.value || 500);
+    if (sol < threshold) continue;
+    const accounts = tr.message.accountKeys;
+    const wallet = typeof accounts[maxGain.idx]==='string' ? accounts[maxGain.idx] : (accounts[maxGain.idx]?.pubkey || accounts[0] || '');
+    const dt = new Date((block.blockTime||Math.floor(Date.now()/1000))*1000);
+    out.push({ wallet, tokenPair:'SOL/*', platform:'Unknown', solAmount:sol, usdValue: sol*(solPrice||0), time: dt.toTimeString().split(' ')[0], date: dt.toISOString().split('T')[0], timestamp: dt.getTime() });
+  }
+  return out;
+}
+
+// Conservative HTTP polling as fallback
+let pollDelay = 30000;
+async function pollBlocks(){
+  if (!streaming){ setTimeout(pollBlocks, pollDelay); return; }
+  try{
+    const slot = await scheduleRpc('getSlot', []);
+    const block = await scheduleRpc('getBlock', [slot, {maxSupportedTransactionVersion:0, transactionDetails:'full', rewards:false}]);
+    const events = extractWhaleEventsFromBlock(block);
+    for (const e of events){ addTransaction(e); }
+    pollDelay = Math.max(15000, Math.floor(pollDelay*0.9));
+  }catch(_){
+    pollDelay = Math.min(120000, Math.floor(pollDelay*1.5));
+  }
+  setTimeout(pollBlocks, pollDelay);
+}
+
+// WS streaming
+let ws;
+const sigQueue = [];
+let sigTimer = null;
+const seenSigs = new Set();
+function startSigDrainer(){
+  if (sigTimer) return;
+  sigTimer = setInterval(async ()=>{
+    if (!streaming) return;
+    const sig = sigQueue.shift();
+    if (!sig) return;
+    try{
+      const res = await scheduleRpc('getTransaction', [sig, {maxSupportedTransactionVersion:0}]);
+      const meta = res?.meta; const tr = res?.transaction;
+      if (!meta || !tr) return;
+      const pre = meta.preBalances||[]; const post = meta.postBalances||[];
+      let delta = 0; if (pre.length && post.length) delta = post[0]-pre[0];
+      const sol = Math.abs(lamportsToSol(delta));
+      const wallet = tr?.message?.accountKeys?.[0] || '';
+      const dt = new Date((res?.blockTime||Math.floor(Date.now()/1000))*1000);
+      addMemecoinTransaction({ tokenName:'Unknown', status:'bonding', platform:'Detected', txType: delta<0 ? 'BUY' : 'SELL', wallet, amount: sol, amountUsd: sol*(solPrice||0), timestamp: dt.getTime() });
+    }catch(_){}
+  }, 2000);
+}
+
+
+function connectWS(){ /* WebSocket disabled for public RPC (403). Using HTTP polling instead. */ }
+
+
+
+// ====== INIT ======
+
+// HTTP-based memecoin activity polling (no WS)
+let memeDelay = 30000; // 30s baseline
+async function pollMemecoins(){
+  if (!streaming){ setTimeout(pollMemecoins, memeDelay); return; }
+  try{
+    // Iterate over known platform program IDs
+    for (const programId of Object.values(PLATFORM_PROGRAMS)){
+      // Get latest signatures for the program
+      const sigs = await scheduleRpc('getSignaturesForAddress', [programId, {limit: 6}]);
+      if (!Array.isArray(sigs)) continue;
+      for (const s of sigs){
+        if (!s || s.err) continue;
+        // Fetch each transaction in a rate-limited way
+        try{
+          const tx = await scheduleRpc('getTransaction', [s.signature, {maxSupportedTransactionVersion:0}]);
+          const meta = tx?.meta; const tr = tx?.transaction;
+          if (!meta || !tr) continue;
+          // Approximate SOL delta for fee payer
+          const pre = meta.preBalances||[]; const post = meta.postBalances||[];
+          let delta = 0; if (pre.length && post.length) delta = post[0]-pre[0];
+          const sol = Math.abs(delta/1e9);
+          const wallet = tr?.message?.accountKeys?.[0] || '';
+          const dt = new Date((tx?.blockTime||Math.floor(Date.now()/1000))*1000);
+          addMemecoinTransaction({
+            tokenName: 'Unknown',
+            status: 'bonding',
+            platform: 'Detected',
+            txType: delta<0 ? 'BUY' : 'SELL',
+            wallet: wallet,
+            amount: sol,
+            amountUsd: sol*(solPrice||0),
+            timestamp: dt.getTime()
+          });
+        }catch(_){ /* skip */ }
+      }
+    }
+    memeDelay = Math.max(15000, Math.floor(memeDelay*0.95));
+  }catch(_){
+    memeDelay = Math.min(120000, Math.floor(memeDelay*1.3));
+  }
+  setTimeout(pollMemecoins, memeDelay);
+}
+
+async function init(){
+  bindInputs();
+  await getSolPrice();
+  updateStats(); updateMemecoinStats();
+  pollBlocks(); pollMemecoins();
+  applyFilters(); applyMemecoinFilters();
+}
+window.addEventListener('load', init);
+</script>
+</body>
+</html>

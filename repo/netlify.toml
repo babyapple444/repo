@@ -1,0 +1,8 @@
+[functions]
+node_bundler = "esbuild"
+
+[[redirects]]
+from = "/rpc"
+to = "/.netlify/functions/rpc-proxy"
+status = 200
+force = true
